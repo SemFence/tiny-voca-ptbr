@@ -111,8 +111,11 @@ os fonemas do pt-BR), `prepare.py` (`--workers`), `infer.py` e `evaluate.py` (fr
 
 ## Licença
 
-Apache-2.0 para o código e os pesos. CC BY 4.0 para os datasets (crédito obrigatório a **SemFence (Gustavo Toledo)**) e para o
-léxico do fonemizador (dicionário MFA).
+- **Código:** Apache-2.0 (`LICENSE`), com o crédito da SemFence e do tiny-voca original em `NOTICE`. Quem redistribui o código
+  deve manter o `NOTICE`.
+- **Pesos do modelo:** CC BY 4.0, com crédito obrigatório a **SemFence (Gustavo Toledo)**
+  ([Hugging Face](https://huggingface.co/semfence/tiny-voca-ptbr)).
+- **Datasets e léxico do fonemizador:** CC BY 4.0 (o léxico é derivado do dicionário MFA).
 
 ## Citação
 
