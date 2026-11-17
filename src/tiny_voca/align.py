@@ -43,7 +43,23 @@ ALIGNMENT_VERSION = 2
 PAUSING = (",", ".", "?", "!", ";", ":", "—", "…")
 # Every inventory phone is a label of the recogniser (checked when it loads);
 # only the unknown-phone token needs a stand-in.
-ALIGNER_LABEL_FALLBACK = {UNK: "<unk>"}
+ALIGNER_LABEL_FALLBACK = {UNK: "<unk>", "j̃": "j", "w̃": "w"}   # the recogniser has no label for the nasal glides
+# The recogniser was trained on eSpeak labels, and eSpeak writes Brazilian Portuguese with its own conventions
+# (nasal vowels as vowel + ŋ, the Brazilian "r" as ɾ/ʁ/ɹ, unstressed u as ʊ, t/d before i as plain t/d, ...).
+# During alignment each of OUR phones may therefore be heard as any label of its set; the model's own phone
+# inventory is not changed. Sets were chosen from what the recogniser emits over our recordings (see
+# scripts/diag_labels.py) and from the phonetics.
+ALIGNER_LABEL_SETS = {
+    "ẽ": ("eɪ", "e", "ɛ", "ɛ̃"), "ĩ": ("i", "ɨ", "eɪ", "ɪ"), "õ": ("u", "ũ", "o", "ʊ", "ɔ̃"), "ũ": ("ũ", "u", "ʊ"),
+    "ɐ̃": ("ɐ̃ʊ̃", "ɐ̃", "ɐ", "ã", "a"), "w̃": ("ŋ", "ũ", "w", "u", "ʊ", "ɐ̃ʊ̃"), "j̃": ("ŋ", "j", "ɲ", "i", "ɪ"),
+    "j": ("j", "i", "ɪ", "ɨ"), "w": ("w", "u", "ʊ", "l"),
+    "x": ("ɾ", "ʁ", "ɹ", "h", "x", "r"), "ɾ": ("ɹ", "ɾ", "r"),
+    "tʃ": ("t", "ʃ", "tʃ"), "dʒ": ("d", "ʒ", "dʒ"),
+    "u": ("ʊ", "u", "o"), "e": ("ɨ", "e", "eɪ", "ɛ", "i"), "ɛ": ("e", "ɛ", "ɐ"), "o": ("o", "u", "ɔ", "ʊ"),
+    "i": ("ɨ", "i", "j", "ɪ"), "a": ("ɐ", "a", "ɑ"), "ɐ": ("ɐ", "a", "ɐ̃", "ə"), "ɔ": ("ɔ", "ɑ", "o"),
+    "s": ("s", "ʃ", "z"), "z": ("z", "s", "ʒ"), "ʃ": ("ʃ", "s"), "ʒ": ("ʒ", "z", "ʃ"),
+    "l": ("l", "ɾ", "ɫ", "w"), "ʎ": ("ʎ", "l", "j"), "ɲ": ("ɲ", "n", "j", "ŋ"), "n": ("n", "ŋ"), "m": ("m", "ŋ"),
+}
 
 
 @dataclass(frozen=True)
@@ -262,6 +278,10 @@ class PhoneRecognizer:
             self.model = self.model.half()
         vocabulary = Path(hf_hub_download(name, "vocab.json", local_files_only=local_files_only))
         self.vocabulary = json.loads(vocabulary.read_text(encoding="utf-8"))
+        import unicodedata   # the same nasal vowel can be spelled composed or decomposed
+        for form in ("NFC", "NFD"):
+            for key, value in list(self.vocabulary.items()):
+                self.vocabulary.setdefault(unicodedata.normalize(form, key), value)
         self.blank = int(self.model.config.pad_token_id)
         self.name = name
         self.revision = vocabulary.parent.name   # snapshot directory = commit hash
@@ -272,6 +292,33 @@ class PhoneRecognizer:
     def label(self, symbol):
         symbol = symbol if symbol in self.vocabulary else ALIGNER_LABEL_FALLBACK[symbol]
         return int(self.vocabulary[symbol])
+
+    def label_set(self, symbol):
+        """Ids of every recogniser label that may stand for ``symbol`` (composed and decomposed spellings)."""
+        import unicodedata
+        ids = set()
+        for wanted in (symbol,) + ALIGNER_LABEL_SETS.get(symbol, ()):
+            for form in {wanted, unicodedata.normalize("NFC", wanted), unicodedata.normalize("NFD", wanted)}:
+                if form in self.vocabulary:
+                    ids.add(int(self.vocabulary[form]))
+        return tuple(sorted(ids)) if ids else (self.label(symbol),)
+
+    @staticmethod
+    def extend(log_probs, sets):
+        """Append one column per distinct label set (log of the summed probability of its members).
+        Returns the extended matrix and one column index per token."""
+        from scipy.special import logsumexp
+        columns, labels, extra = {}, [], []
+        for ids in sets:
+            if len(ids) == 1:
+                labels.append(ids[0]); continue
+            if ids not in columns:
+                columns[ids] = log_probs.shape[1] + len(extra)
+                extra.append(logsumexp(log_probs[:, list(ids)], axis=1))
+            labels.append(columns[ids])
+        if extra:
+            log_probs = np.concatenate([log_probs, np.stack(extra, axis=1)], axis=1)
+        return log_probs, labels
 
     def log_probs(self, wave, sample_rate):
         from scipy.signal import resample_poly
@@ -290,8 +337,8 @@ def align_utterance(recognizer, phonemized, wave, voiced, config, settings):
     frames = len(wave) // config.hop
     if len(wave) != frames * config.hop or len(voiced) != frames:
         raise ValueError("waveform length must be frames * hop")
-    labels = [recognizer.label(s) for s in symbols if s in PHONE_SET or s == UNK]
-    log_probs = recognizer.log_probs(wave, config.sample_rate)
+    sets = [recognizer.label_set(s) if s != UNK else (recognizer.label(s),) for s in symbols if s in PHONE_SET or s == UNK]
+    log_probs, labels = recognizer.extend(recognizer.log_probs(wave, config.sample_rate), sets)
     spans = token_spans(log_probs, labels, recognizer.blank)
     level = frame_energy_db(wave, config.hop, settings.energy_window)
     silent, threshold = silence_mask(level, settings)

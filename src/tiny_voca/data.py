@@ -50,7 +50,7 @@ class AnnotatedDataset:
         self.manifest = Path(manifest)
         metadata_path = self.manifest.parent / "annotations.json"
         if not metadata_path.exists():
-            raise ValueError("not an annotation manifest (legacy byte-token manifests are stale): run tiny_voca.annotate")
+            raise ValueError("not an annotation manifest: run tiny_voca.annotate")
         metadata = json.loads(metadata_path.read_text())
         if not metadata.get("complete"):
             raise ValueError("annotation run is incomplete; finish it with --resume before training")
@@ -113,7 +113,7 @@ class AnnotatedDataset:
         pitch, trusted = continuous_pitch(stored["prosody"][:, 0], stored["prosody"][:, 1])
         voiced = stored["prosody"][:, 1]
         if self.voiced_vowels:
-            # The pitch tracker misses low, creaky vowels (12% of M2's vowel frames),
+            # The pitch tracker misses low, creaky vowels in the lower voice,
             # and a model trained on those labels drops whole vowels. A vowel is voiced
             # by definition: mark its frames voiced. Their pitch stays interpolated and
             # untrusted, so the pitch loss still ignores what the tracker did not measure.

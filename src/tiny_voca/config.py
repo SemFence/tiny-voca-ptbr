@@ -19,9 +19,9 @@ class Config:
     n_mels: int = 80
     f0_min: float = 50.0
     f0_max: float = 600.0
-    speakers: tuple[str, ...] = ("F2", "M2")
-    # Phoneme tokens from tiny_voca.text.SYMBOLS (front-end version 3).
-    vocab_size: int = 76
+    speakers: tuple[str, ...] = ("F_s4", "M_sm4")
+    # Phoneme tokens from tiny_voca.text.SYMBOLS (dizione-ptbr, Brazilian Portuguese).
+    vocab_size: int = 55
     # Text encoder and frame-level transformer.
     channels: int = 192
     heads: int = 4
@@ -90,14 +90,3 @@ class Config:
     @property
     def acoustic_fingerprint(self):
         return _digest(self.acoustic_config)
-
-    @property
-    def legacy_feature_fingerprint(self):
-        """Fingerprint written by the byte-token preparation (front end 2).
-
-        Feature files carrying it hold compatible acoustics and STALE tokens;
-        only the annotation step may read them, and it ignores their tokens.
-        """
-        fields = ("sample_rate", "hop", "n_fft", "n_mels", "f0_min", "f0_max", "speakers")
-        return _digest({**{key: getattr(self, key) for key in fields}, "vocab_size": 259, "feature_version": 2,
-                        "frontend_version": 2, "pitch_reference_hz": 200, "log_floor": 1e-5})

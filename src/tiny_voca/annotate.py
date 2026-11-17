@@ -42,9 +42,8 @@ def load_acoustic_rows(features, split, config):
         raise ValueError(f"acoustic preparation for {split} is missing or incomplete")
     rows = [json.loads(line) for line in (features / (split + ".jsonl")).read_text(encoding="utf-8").split("\n") if line.strip()]
     for row in rows:
-        # Current acoustic-only files, or files from the byte-token preparation:
-        # same audio/DSP settings, stale tokens that are ignored here.
-        if row.get("acoustic") != config.acoustic_fingerprint and row.get("features") != config.legacy_feature_fingerprint:
+        # Acoustic-only files made with the current audio/DSP settings (tokens are made by the annotation step).
+        if row.get("acoustic") != config.acoustic_fingerprint:
             raise ValueError("feature files were not produced with compatible audio/DSP settings; rerun acoustic preparation")
         if row["speaker"] not in config.speakers:
             raise ValueError(f"unknown speaker {row['speaker']!r}")

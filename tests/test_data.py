@@ -8,6 +8,7 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+import dizione_ptbr
 import numpy as np
 import torch
 
@@ -20,25 +21,20 @@ from tiny_voca.losses import SpectralLoss, mel_filterbank
 from tiny_voca.train import balanced_indices, check_leakage
 from helpers import small_config, write_annotations
 
-# Fingerprint stored in every feature manifest written by the byte-token preparation
-# on the real corpus (n4ze3m/tiny-voca @ 93dfa15b). Those files remain usable.
-REAL_LEGACY_FEATURES = "8b1517b100ff83bbd732952b23880cef2d6e761e3f8e996aa0e9d5373e095ee1"
-
 
 class DataTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         torch.set_num_threads(1)
 
-    def test_existing_acoustic_features_stay_compatible_while_tokens_are_versioned_separately(self):
+    def test_acoustic_features_do_not_depend_on_the_model_or_the_front_end(self):
         c = Config()
-        self.assertEqual(c.legacy_feature_fingerprint, REAL_LEGACY_FEATURES)
         changed = replace(c, channels=128, dropout=0.2, acoustic_layers=3, cep_causal=64)
         self.assertEqual(c.acoustic_fingerprint, changed.acoustic_fingerprint)      # model changes reuse features
         self.assertNotEqual(c.fingerprint, changed.fingerprint)
         self.assertNotEqual(c.acoustic_fingerprint, replace(c, n_mels=40).acoustic_fingerprint)
         baseline = c.acoustic_fingerprint
-        with patch.object(text, "FRONTEND_VERSION", 999):
+        with patch.object(dizione_ptbr, "VERSION", 999):
             self.assertEqual(c.acoustic_fingerprint, baseline)                      # a front-end change does not touch acoustics
 
     def test_dataset_reads_annotations_and_ignores_stale_byte_tokens(self):
@@ -88,17 +84,17 @@ class DataTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     AnnotatedDataset(manifest, c)
         with tempfile.TemporaryDirectory() as directory:
-            # A manifest from the old preparation (no annotation layer next to it) is refused outright.
-            legacy = Path(directory) / "train.jsonl"
-            legacy.write_text(json.dumps({"id": "a", "features": REAL_LEGACY_FEATURES, "path": "a.pt"}) + "\n")
-            with self.assertRaisesRegex(ValueError, "legacy byte-token manifests are stale"):
-                AnnotatedDataset(legacy, c)
-            # The annotation step itself accepts those feature files (audio only) and current ones.
+            # A manifest with no annotation layer next to it is refused outright.
+            manifest = Path(directory) / "train.jsonl"
+            manifest.write_text(json.dumps({"id": "a", "path": "a.pt"}) + "\n")
+            with self.assertRaisesRegex(ValueError, "not an annotation manifest"):
+                AnnotatedDataset(manifest, c)
+            # The annotation step reads acoustic-only rows made with the current settings and refuses any other.
             (Path(directory) / "train.preparation.json").write_text(json.dumps({"complete": True}))
-            rows = [{"id": "a", "features": REAL_LEGACY_FEATURES, "speaker": "F2"}, {"id": "b", "acoustic": Config().acoustic_fingerprint, "speaker": "M2"}]
-            legacy.write_text("".join(json.dumps(r) + "\n" for r in rows))
+            rows = [{"id": "a", "acoustic": Config().acoustic_fingerprint, "speaker": "F_s4"}, {"id": "b", "acoustic": Config().acoustic_fingerprint, "speaker": "M_sm4"}]
+            manifest.write_text("".join(json.dumps(r) + "\n" for r in rows))
             self.assertEqual(len(load_acoustic_rows(Path(directory), "train", Config())), 2)
-            legacy.write_text(json.dumps({"id": "a", "features": "something-else", "speaker": "F2"}) + "\n")
+            manifest.write_text(json.dumps({"id": "a", "acoustic": "something-else", "speaker": "F_s4"}) + "\n")
             with self.assertRaisesRegex(ValueError, "compatible audio/DSP"):
                 load_acoustic_rows(Path(directory), "train", Config())
 
@@ -133,11 +129,11 @@ class DataTests(unittest.TestCase):
         self.assertEqual([restored.next() for _ in range(25)], following)
 
     def test_balanced_selection_and_leakage_report(self):
-        rows = [{"speaker": "F2"}] * 8 + [{"speaker": "M2"}] * 8
+        rows = [{"speaker": "F_s4"}] * 8 + [{"speaker": "M_sm4"}] * 8
         indices = balanced_indices(SimpleNamespace(rows=rows), 4)
-        self.assertEqual([rows[i]["speaker"] for i in indices], ["F2", "M2", "F2", "M2"])
-        train = SimpleNamespace(rows=[{"id": "a_F2", "text_hash": "same", "text": "Hello."}])
-        validation = SimpleNamespace(rows=[{"id": "a_M2", "text_hash": "same", "text": "Hello."}])
+        self.assertEqual([rows[i]["speaker"] for i in indices], ["F_s4", "M_sm4", "F_s4", "M_sm4"])
+        train = SimpleNamespace(rows=[{"id": "a_F2", "text_hash": "same", "text": "Olá."}])
+        validation = SimpleNamespace(rows=[{"id": "a_M2", "text_hash": "same", "text": "Olá."}])
         with self.assertRaisesRegex(ValueError, "a_M2.*a_F2"):
             check_leakage(train, validation)
 
@@ -181,7 +177,7 @@ class DataTests(unittest.TestCase):
             stream = io.BytesIO()
             sf.write(stream, 0.1 * np.sin(2 * np.pi * 200 * time), rate, format="WAV")
             return {"bytes": stream.getvalue()}
-        rows = [{"id": str(i), "text": "Hello.", "voice_id": "F2", "audio": audio(24000), "reference_audio": b"reference bytes",
+        rows = [{"id": str(i), "text": "Olá.", "voice_id": "F_s4", "audio": audio(24000), "reference_audio": b"reference bytes",
                  "source_license": "test-synthetic"} for i in range(5)]
         rows[2]["text"] = None
         rows[3]["audio"] = None
@@ -192,7 +188,7 @@ class DataTests(unittest.TestCase):
             pq.write_table(pa.Table.from_pylist(rows), source)
             output = root / "features"
             output.mkdir()
-            args = SimpleNamespace(output=output, inputs=[source], split="train", text_column="text", speaker_column="voice_id", resume=False)
+            args = SimpleNamespace(output=output, inputs=[source], split="train", text_column="text", speaker_column="voice_id", resume=False, workers=1)
             calls = {"count": 0}
 
             def interrupted(wave, config):

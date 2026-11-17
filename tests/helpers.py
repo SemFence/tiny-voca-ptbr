@@ -1,4 +1,4 @@
-"""Synthetic fixtures. No real recordings, eSpeak or network are needed."""
+"""Synthetic fixtures. No real recordings or network are needed."""
 
 import hashlib
 import json
@@ -15,8 +15,8 @@ def small_config():
                   predictor_channels=16, cep_causal=12, cep_anti=4, noise_cep=8, max_frames=400)
 
 
-SYMBOLS = ("<bos>", "h", "ə", "l", "oʊ", "<sp>", "w", "ɜː", "l", "d", ".", "<eos>")
-STRESS = (0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0)
+SYMBOLS = ("<bos>", "b", "ɔ", "l", "ɐ", "<sp>", "k", "a", "z", "ɐ", ".", "<eos>")
+STRESS = (0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0)
 
 
 def sample(c, voice=0, durations=(3, 4, 5, 4, 9, 0, 4, 10, 5, 4, 0, 6)):
@@ -41,7 +41,7 @@ def write_annotations(root, c, split, count=4, complete=True, annotation="test-a
     rows = []
     for i in range(count):
         item = sample(c, voice=i % 2, durations=(3 + i, 4, 5, 4, 9, i % 2, 4, 10, 5, 4, 0, 6))
-        text = f"hello world {split} {i // 2}."
+        text = f"bola casa {split} {i // 2}."
         path = f"{split}/{split}{i}.pt"
         torch.save({"wave": item["wave"], "mel": item["mel"], "speaker": item["speaker"],
                     "prosody": torch.stack((item["prosody"][:, 0] * item["prosody"][:, 1], item["prosody"][:, 1],

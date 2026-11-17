@@ -23,6 +23,13 @@ from tiny_voca.infer import load_model, match_frontend
 from tiny_voca.text import phonemize
 
 SENTENCES = (
+    "Oi, tudo bem? Este é o tiny voca em português.",
+    "Hoje o tempo está ótimo, e eu me sinto muito tranquilo.",
+    "Você pagou R$ 42,50 por isso no dia 3 de março de 2024?",
+    "O outono chega pintando as árvores de tons dourados, alaranjados e avermelhados.",
+    "Depois de uma longa e difícil viagem pelas montanhas, os viajantes finalmente chegaram à pequena vila, onde foram recebidos com comida quente, um lugar para dormir e muitas perguntas sobre a estrada que deixaram para trás.",
+)
+SENTENCES_EN = (
     "Hello! This is tiny voca.",
     "The weather is nice today, and I feel very relaxed.",
     "Did you really pay $42.50 for that on March 3rd, 2024?",

@@ -1,28 +1,27 @@
-// Runs the phonemizer (dizione, through Pyodide) and the model (ONNX Runtime Web)
-// off the main thread. Messages in: {type: "load"} and {type: "speak", id, text,
-// voice, speed}. Messages out: status, ready, sentence (with its audio, as soon as
-// it is made), done (with the whole clip), error (plain: true when the message is
-// meant for the reader as it is).
+// Runs the phonemizer (@semfence/dizione-ptbr, TypeScript) and the model (ONNX Runtime Web, WebGPU with a WASM
+// fallback) off the main thread. Messages in: {type: "load"} and {type: "speak", id, text, voice, speed}.
+// Messages out: status, ready, sentence (with its audio, as soon as it is made), done (with the whole clip),
+// error (plain: true when the message is meant for the reader as it is).
+// Adapted from the tiny-voca demo by Muhammed Nazeem (Apache-2.0): Pyodide and the Python phonemizer are gone.
 
-const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
-const ORT = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
-const DATA = ["lexicon.tsv", "align.json", "g2p.json", "g2p.npz", "homographs.json"];
+import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.mjs";
+import { Dizione } from "./assets/dizione/engine.js";
+import * as symbols from "./assets/dizione/symbols.js";
+import { makeTokenizer } from "./tokens.js";
 
-importScripts(PYODIDE + "pyodide.js", ORT + "ort.wasm.min.js");
-
-let pyodide, phonemize, session, config;
-
+const ORT = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/";
+let dizione, tokenize, session, config, provider = "wasm";
 const status = (text, progress) => postMessage({ type: "status", text, progress });
 
 // Bump when the files under assets/ change, so browsers fetch them again.
-const VERSION = "2";
+const VERSION = "1";
 
 // Downloaded files are kept in the browser's cache storage: a second visit starts without the network.
 async function download(url, label) {
   const key = `${url}?v=${VERSION}`;
   let store = null;
   try {
-    store = await caches.open("tiny-voca-" + VERSION);
+    store = await caches.open("tiny-voca-ptbr-" + VERSION);
     const hit = await store.match(key);
     if (hit) return new Uint8Array(await hit.arrayBuffer());
   } catch (error) { store = null; }
@@ -53,55 +52,43 @@ async function fetchBytes(url, label) {
 }
 
 async function loadPhonemizer() {
-  status("Loading the phonemizer");
-  pyodide = await loadPyodide({ indexURL: PYODIDE });
-  await pyodide.loadPackage("numpy");
-  const [source, ...files] = await Promise.all([
-    download("assets/dizione.zip", "Loading the phonemizer"),
-    ...DATA.map((name) => download("assets/phonemizer/" + name, "Loading the dictionary")),
+  status("Carregando o fonemizador");
+  const [lexicon, table] = await Promise.all([
+    download("assets/dizione/data/lexicon.tsv", "Carregando o dicionário").then((b) => new TextDecoder().decode(b)),
+    download("assets/dizione/data/open_table.json", "Carregando o dicionário").then((b) => JSON.parse(new TextDecoder().decode(b))),
   ]);
-  status("Starting the phonemizer");
-  pyodide.FS.mkdirTree("/dizione-data");
-  DATA.forEach((name, index) => pyodide.FS.writeFile("/dizione-data/" + name, files[index]));
-  pyodide.unpackArchive(source.buffer, "zip", { extractDir: "/dizione-src" });
-  pyodide.runPython(`
-import json, os, sys
-os.environ["DIZIONE_DATA"] = "/dizione-data"
-sys.path.insert(0, "/dizione-src")
-import dizione
-
-def phonemize_json(text):
-    try:
-        result = dizione.phonemize(text)
-    except ValueError:
-        # Nothing to pronounce (another script, a face, signs only) is no failure: "null", and the sentence is skipped.
-        if any(word for mark, words in dizione.pieces(text) if not mark for word in words):
-            raise
-        return "null"
-    return json.dumps({"ids": list(result.ids), "stress": list(result.stress), "text": str(result)})
-
-phonemize_json("Warm up.")
-`);
-  phonemize = pyodide.globals.get("phonemize_json");
+  dizione = new Dizione(lexicon, table);
+  tokenize = makeTokenizer(symbols);
 }
 
-async function loadModel() {
-  config = await (await fetch("assets/config.json")).json();
-  const bytes = await download("assets/model.onnx", "Loading the model");
-  status("Starting the model");
+async function loadModel(wanted) {
+  config = await (await fetch("assets/model.json")).json();
+  const bytes = await download("assets/model.onnx", "Carregando o modelo");
+  status("Iniciando o modelo");
   ort.env.wasm.wasmPaths = ORT;
   ort.env.wasm.numThreads = 1;
-  session = await ort.InferenceSession.create(bytes, { executionProviders: ["wasm"] });
+  const order = wanted === "wasm" ? ["wasm"] : navigator.gpu ? ["webgpu", "wasm"] : ["wasm"];
+  let lastError = null;
+  for (const name of order) {
+    try {
+      session = await ort.InferenceSession.create(bytes, { executionProviders: [name] });
+      // A first run makes the shaders and checks that this browser really runs the whole graph.
+      provider = name;
+      await synthesize(tokenize(dizione.pieces("Olá.")), 0, 1);
+      return;
+    } catch (error) { lastError = error; session = null; }
+  }
+  throw lastError;
 }
 
-const ABBREVIATIONS = /(?:\b(?:mr|mrs|ms|dr|prof|sr|jr|st|vs|etc|no|inc|ltd|co|e\.g|i\.e|a\.m|p\.m)|\b[A-Z])\.$/i;
+const ABBREVIATIONS = /(?:(?<![A-Za-zÀ-ÖØ-öø-ÿ0-9_])(?:dr|dra|prof|profa|sr|sra|srta|av|tel|obs|etc|ex|nº|vs)|(?<![A-Za-zÀ-ÖØ-öø-ÿ0-9_])[A-ZÀ-ÖØ-Ý])\.$/i;
 
 // Sentences, without breaking after titles, initials or inside numbers.
 // tiny_voca.infer.sentences in the Python package splits the same way; keep the two alike.
 function sentences(text) {
   const parts = [];
   let current = "";
-  for (const piece of text.replace(/\s+/g, " ").trim().split(/(?<=[.!?…]["')\]]?)\s+(?=["'(\[]?[A-Z0-9])/)) {
+  for (const piece of text.replace(/\s+/g, " ").trim().split(/(?<=[.!?…]["')\]]?)\s+(?=["'(\[]?[A-Z0-9À-ÖØ-Ý])/)) {
     current = current ? current + " " + piece : piece;
     if (!ABBREVIATIONS.test(current)) { parts.push(current); current = ""; }
   }
@@ -110,8 +97,7 @@ function sentences(text) {
 }
 
 // A full stop is added when the text ends without a mark: before a final mark the voice lengthens the last
-// syllable and lets the sound fall, without one the audio breaks off. A face or another sign after the last word
-// is no mark ("see you :)"), a comma or a colon is one. tiny_voca.infer.finished does the same; keep the two alike.
+// syllable and lets the sound fall, without one the audio breaks off. tiny_voca.infer.finished does the same.
 function finished(text) {
   const body = text.replace(/\s+$/, "");
   if (!body) return text;
@@ -123,9 +109,9 @@ function finished(text) {
 // One utterance holds at most max_tokens phonemes; longer sentences are cut at commas, then by words.
 // A sentence with nothing to pronounce gives no utterance.
 function fit(sentence) {
-  const result = JSON.parse(phonemize(sentence));
+  const result = tokenize(dizione.pieces(sentence));
   if (!result) return [];
-  if (result.ids.length <= config.model.max_tokens - 12) return [result];
+  if (result.ids.length <= config.max_tokens - 12) return [result];
   const pieces = sentence.split(/(?<=[,;:—])\s+/);
   if (pieces.length > 1) return pieces.flatMap(fit);
   const words = sentence.split(" ");
@@ -143,7 +129,8 @@ async function synthesize(phones, voice, speed) {
     voice: new ort.Tensor("int64", BigInt64Array.from([BigInt(voice)]), [1]),
     speed: scalar(speed), pitch_shift: scalar(0), pitch_range: scalar(1),
   });
-  return output.audio.data;
+  const audio = await output.audio.getData();
+  return audio instanceof Float32Array ? audio : Float32Array.from(audio);
 }
 
 // The model sometimes peaks above 1.0, which would clip in the 16-bit file. Scale the whole clip down then.
@@ -155,7 +142,7 @@ function limitPeak(samples) {
 }
 
 // Shown when no sentence of a text could be read. tiny_voca.infer.speak_text says the same.
-const ENGLISH_ONLY = "tiny-voca only reads English for now.";
+const PORTUGUESE_ONLY = "O tiny-voca-ptbr só lê português do Brasil (pt-BR) por enquanto.";
 
 async function speak({ id, text, voice, speed }) {
   const started = performance.now();
@@ -180,7 +167,7 @@ async function speak({ id, text, voice, speed }) {
     }
   }
   if (!chunks.length) {
-    postMessage({ type: "error", id, message: ENGLISH_ONLY, plain: true });
+    postMessage({ type: "error", id, message: PORTUGUESE_ONLY, plain: true });
     return;
   }
   const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
@@ -188,15 +175,16 @@ async function speak({ id, text, voice, speed }) {
   let offset = 0;
   for (const chunk of chunks) { audio.set(chunk, offset); offset += chunk.length; }
   limitPeak(audio);
-  postMessage({ type: "done", id, audio, sampleRate: config.sample_rate, phonemeTime, modelTime,
+  postMessage({ type: "done", id, audio, sampleRate: config.sample_rate, phonemeTime, modelTime, provider,
                 totalTime: performance.now() - started }, [audio.buffer]);
 }
 
 onmessage = async ({ data }) => {
   try {
     if (data.type === "load") {
-      await Promise.all([loadPhonemizer(), loadModel()]);
-      postMessage({ type: "ready", voices: config.voices, sampleRate: config.sample_rate });
+      await loadPhonemizer();
+      await loadModel(data.provider);
+      postMessage({ type: "ready", voices: config.voices, sampleRate: config.sample_rate, provider });
     } else if (data.type === "speak") {
       await speak(data);
     }

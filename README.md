@@ -1,147 +1,119 @@
-# tiny-voca
+# tiny-voca-ptbr
 
-tiny-voca is a small English text-to-speech model. It has two voices, 4.5M
-parameters, and runs on a CPU or in the browser.
+Um modelo de texto para fala em **português do Brasil (pt-BR)** com **4,5 milhões de parâmetros** e duas vozes sintéticas.
+Roda em CPU, na GPU do Mac (MPS) e no navegador (WebGPU/WASM). Treinado do zero, com dados sintéticos abertos.
 
-[Demo](https://tiny-voca.n4ze3m.com) · [Weights](https://huggingface.co/n4ze3m/tiny-voca) · [Dataset](https://huggingface.co/datasets/n4ze3m/tiny-voca)
+[Pesos](https://huggingface.co/semfence/tiny-voca-ptbr) · [Dataset de fala](https://huggingface.co/datasets/semfence/ptbr-synthetic-speech) · [Dataset de frases](https://huggingface.co/datasets/semfence/ptbr-sentences) · [Fonemizador](https://github.com/SemFence/dizione-ptbr)
 
-## Features
+Criado pela **SemFence** · pesquisador: **Gustavo Toledo**. É a receita do [tiny-voca](https://github.com/n4ze3m/tiny-voca)
+(Muhammed Nazeem, Apache-2.0) aplicada ao português do Brasil.
 
-- **Small**: 4,537,291 parameters, 18 MB, waveform generator included.
-- **Fast**: about 70x real time on four CPU threads.
-- **Two voices**: F2 (female) and M2 (male), American English, 24 kHz.
-- **Runs anywhere**: PyTorch, ONNX Runtime, and ONNX Runtime Web.
-- **Open**: code, weights, training recipe and dataset. Trained from scratch.
+> **Só pt-BR.** Não serve para português de Portugal nem para outras línguas.
 
-## Install
+## Características
+
+- **Pequeno**: 4.533.259 parâmetros, gerador de onda incluído.
+- **Rápido**: de ~113× (CPU) a ~165× (GPU do Mac M4) o tempo real; ~65× no navegador com WebGPU.
+- **Duas vozes**: `F_s4` (feminina) e `M_sm4` (masculina), sintéticas, 24 kHz.
+- **Roda em qualquer lugar**: PyTorch, ONNX Runtime e ONNX Runtime Web.
+- **Aberto**: código, pesos, receita de treino e dados.
+
+A qualidade do som é a do tiny-voca original: o sintetizador por filtro e pulsos (25 mil parâmetros) soa mais sintético do que
+um vocoder neural. Números de avaliação e limitações estão em [`release/README.md`](release/README.md).
+
+## Instalação
 
 ```bash
-git clone https://github.com/n4ze3m/tiny-voca.git
-cd tiny-voca
-pip install -e ".[own]"
-hf download n4ze3m/tiny-voca --local-dir weights
-export DIZIONE_DATA=weights/phonemizer
+git clone https://github.com/SemFence/tiny-voca-ptbr.git
+cd tiny-voca-ptbr
+pip install -e ".[own]"          # inclui o fonemizador dizione-ptbr
+hf download semfence/tiny-voca-ptbr --local-dir weights
 ```
 
-## Usage
+## Uso
 
 ```bash
 python -m tiny_voca.infer \
-  --checkpoint weights/tiny-voca.pt \
-  --voice F2 \
-  --text "Hello! This is tiny voca." \
-  --output hello.wav
+  --checkpoint weights/tiny-voca-ptbr.pt \
+  --voice F_s4 \
+  --text "Olá! Este é o tiny voca em português." \
+  --output ola.wav
 ```
 
-| Option | Default | Meaning |
+| Opção | Padrão | O que faz |
 |---|---|---|
-| `--text-file` | | Read the text from a file instead of `--text` |
-| `--voice` | `F2` | `F2` or `M2` |
-| `--speed` | 1.0 | Speaking rate |
-| `--pitch-shift` | 0 | Raise or lower the pitch |
-| `--pitch-range` | 1.0 | More or less pitch movement |
+| `--text-file` | | Lê o texto de um arquivo em vez de `--text` |
+| `--voice` | `F_s4` | `F_s4` ou `M_sm4` |
+| `--speed` | 1,0 | Velocidade da fala |
+| `--pitch-shift` | 0 | Sobe ou desce o tom |
+| `--pitch-range` | 1,0 | Mais ou menos variação de tom |
+| `--device` | `cpu` | `cpu`, `mps` (Mac) ou `cuda` |
 
-Long text is fine. It is read one sentence at a time and the audio is joined.
-A text that ends without a mark gets a full stop, so the last word does not
-break off. A sentence with nothing to read, such as one in another script, is
-skipped. The output never peaks above 0.99, so it does not clip as a 16-bit
-WAV. In Python, `tiny_voca.infer.speak_text` does the same.
+Texto longo é lido frase a frase e o áudio é juntado. Um texto sem pontuação final recebe um ponto, para a última palavra não
+ser cortada. Uma frase sem nada para ler (por exemplo, só emoji) é pulada. O áudio nunca passa de 0,99 de pico.
+Em Python, `tiny_voca.infer.speak_text` faz o mesmo.
 
 ## ONNX
 
 ```bash
-python -m tiny_voca.export --checkpoint weights/tiny-voca.pt --output tiny-voca.onnx
+python -m tiny_voca.export --checkpoint weights/tiny-voca-ptbr.pt --output tiny-voca-ptbr.onnx
+python scripts/check_onnx.py --help      # compara o ONNX com o PyTorch
 ```
 
-A ready file is in the weights repository as `onnx/model.onnx`. The
-[model card](https://huggingface.co/n4ze3m/tiny-voca) shows how to call it.
+## Demonstração no navegador
 
-## Web demo
-
-The [demo](https://tiny-voca.n4ze3m.com) runs the model in the browser. It
-plays each sentence as soon as it is made, and keeps the whole clip in the
-player. Its source is in `web/`.
+A pasta [`web/`](web/README.md) tem a demo: o fonemizador em TypeScript
+([`@semfence/dizione-ptbr`](https://github.com/SemFence/dizione-ptbr-js)) e o ONNX no WebGPU (ou WASM). Nada do que a pessoa
+digita sai do aparelho.
 
 ```bash
 cd web
-bash fetch_assets.sh /path/to/dizione
-npx wrangler dev
+bash build_assets.sh ../release/onnx /caminho/para/dizione-ptbr-js
+python3 -m http.server 8765 --directory public       # abra http://localhost:8765
 ```
 
-## Training
+## Treino
+
+O fluxo completo (ambiente, dados, características, anotação e treino) está em [`scripts/cloud_run.sh`](scripts/cloud_run.sh),
+pensado para uma máquina alugada com uma GPU CUDA. Passo a passo:
 
 ```bash
-export TINY_VOCA_FRONTEND=own
-python -m tiny_voca.prepare --inputs data/train-*.parquet --split train --output features
-python -m tiny_voca.annotate --features features --output annotations
-python -m tiny_voca.train --train annotations/train.jsonl --validation annotations/validation.jsonl \
-  --output runs/NAME --steps 104000 --gan-start 8000 --gan-ratio 0.7 --teacher-final 0
-python -m tiny_voca.evaluate --checkpoint runs/NAME/inference.pt --annotations annotations --output eval/NAME
+python -m tiny_voca.prepare --inputs data/train-*.parquet --split train --output feats --workers 8
+python -m tiny_voca.annotate --features feats --output ann --dataset-revision <sha-do-dataset> --device cuda
+python -m tiny_voca.train --train ann/train.jsonl --validation ann/validation.jsonl --output runs/ptbr \
+  --steps 104000 --gan-start 8000 --gan-ratio 0.7 --teacher-final 0
+python scripts/eval_ptbr.py --checkpoint runs/ptbr/inference.pt --corpus frases/corpus.jsonl --output eval/ptbr
 ```
 
-The released weights took 7.7 hours on one RTX 4090. More about the model and
-the data is in [docs/model.md](docs/model.md).
+O modelo publicado foi treinado por 104.000 passos em uma RTX 5080 alugada (cerca de 8 horas, ~US$ 3 de GPU). Mais sobre o
+modelo e os dados em [`docs/model.md`](docs/model.md).
 
-## Tests
+## Testes
 
 ```bash
 PYTHONPATH=src:tests python -m unittest discover -s tests
+node web/test_tokens.mjs <tokens_golden.json>     # os tokens da demo contra os do Python
 ```
 
-## Limits
+## Limitações
 
-- English only. Two fixed voices. No voice cloning.
-- The F2 voice sounds younger than intended. A more mature voice is planned.
-- Foreign names and odd spellings are often read wrong.
-- No streaming yet.
+- Só pt-BR, duas vozes fixas, sem clonagem de voz.
+- Nomes e palavras estrangeiras são lidos com as regras do português.
+- Sotaques regionais (chiado carioca, "r" caipira) não são modelados.
+- Sem fala em fluxo (streaming) por enquanto.
+- Não houve teste de audição com pessoas; a avaliação é automática (WER com Whisper).
 
-## Community
+## O que mudou em relação ao tiny-voca original
 
-Built by other people on top of tiny-voca. I have not tested them.
+`text.py` (fonemizador `dizione-ptbr`, 55 símbolos), `config.py` (vozes e vocabulário), `align.py` (rótulos do alinhador para
+os fonemas do pt-BR), `prepare.py` (`--workers`), `infer.py` e `evaluate.py` (frases e avaliação em português), `model.py`
+(a fase em float64 roda na CPU quando o dispositivo é MPS), `scripts/` e `web/`.
 
-Languages and voices:
+## Licença
 
-- [apptor-tiny-tts](https://huggingface.co/apptor/apptor-tiny-tts): German.
-- [tiny-voca-it](https://github.com/carbogninalberto/tiny-voca-it): Italian.
-- [zerre-tts](https://github.com/erkinemreta1/zerre-tts): Turkish.
-- [korean-tts](https://github.com/ooodev/korean-tts): Korean, and Korean mixed with English.
-- [fiato](https://huggingface.co/cfahlgren1/fiato): English, with sighs, exhales and gasps.
+Apache-2.0 para o código e os pesos. CC BY 4.0 para os datasets (crédito obrigatório a **SemFence (Gustavo Toledo)**) e para o
+léxico do fonemizador (dicionário MFA).
 
-Ports and apps:
+## Citação
 
-- [voca](https://github.com/sultson/voca): a rewrite in Rust.
-- [tiny-voca-dashboard](https://github.com/kleenpulse/tiny-voca-dashboard): a local dashboard.
-- [tinyvoca](https://github.com/spurious-cox/tinyvoca): a Mac app.
-
-Same idea, other sounds:
-
-- [tinygroove](https://github.com/totomanov/tinygroove): a drum machine with no samples.
-
-Made something? Open an issue and I will add it.
-
-## Cost
-
-The whole project cost $9.56 of GPU time on one rented RTX 4090. That is the
-dataset, the failed tries and the final training run.
-
-![Cost breakdown](docs/cost.png)
-
-## Support
-
-It cost less than a pizza to make. If you like it, you can buy me one:
-https://ko-fi.com/n4ze3m
-
-## License
-
-Apache-2.0 for code and weights. CC BY 4.0 for the dataset.
-
-## Citation
-
-```bibtex
-@software{nazeem2026tinyvoca,
-  author = {Nazeem, Muhammed},
-  title  = {tiny-voca: a 4.5M-parameter two-voice English text-to-speech model},
-  year   = {2026},
-  url    = {https://huggingface.co/n4ze3m/tiny-voca}
-}
-```
+Veja [`CITATION.cff`](CITATION.cff). Se usar este trabalho, cite também o tiny-voca original.

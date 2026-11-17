@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tiny-voca</title>
-<meta name="description" content="tiny-voca is a 4.5M-parameter English text-to-speech model. This page runs it in your browser.">
+<title>tiny-voca-ptbr</title>
+<meta name="description" content="tiny-voca-ptbr é um modelo de texto para fala em português do Brasil, com 4,5M de parâmetros. Esta página o executa no seu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171512'/%3E%3Cpath d='M8 13v6M12 9v14M16 12v8M20 7v18M24 13v6' stroke='%23f4efe6' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -74,68 +74,69 @@
 <body>
 <main>
   <header>
-    <h1>tiny-voca</h1>
-    <p>A <strong>4.5M-parameter</strong> English text-to-speech model with two voices, trained from scratch.
-       This page runs it in your browser: nothing you type leaves your device.</p>
+    <h1>tiny-voca-ptbr</h1>
+    <p>Um modelo de texto para fala em <strong>português do Brasil</strong> com <strong>4,5M de parâmetros</strong> e duas vozes, treinado do zero.
+       Esta página o executa no seu navegador: nada do que você digita sai do seu dispositivo.</p>
   </header>
 
   <section class="panel">
-    <textarea id="text" spellcheck="false" aria-label="Text to speak">Hello! This is tiny voca, a small text to speech model running entirely in your browser.</textarea>
+    <textarea id="text" spellcheck="false" aria-label="Texto para falar">Olá! Eu sou uma voz em português do Brasil, feita pela SemFence. Estou rodando aqui mesmo, no seu navegador: nada do que você escreve sai do seu aparelho.</textarea>
     <div class="examples" id="examples"></div>
     <div class="controls">
-      <div class="voices" role="radiogroup" aria-label="Voice">
-        <label><input type="radio" name="voice" value="0"><span>F2</span></label>
-        <label><input type="radio" name="voice" value="1" checked><span>M2</span></label>
+      <div class="voices" role="radiogroup" aria-label="Voz">
+        <label><input type="radio" name="voice" value="0"><span>Feminina</span></label>
+        <label><input type="radio" name="voice" value="1" checked><span>Masculina</span></label>
       </div>
-      <label class="speed">Speed <input id="speed" type="range" min="0.7" max="1.4" step="0.05" value="1"><output id="speed-value">1.00</output></label>
-      <button id="speak" disabled>Speak</button>
+      <label class="speed">Velocidade <input id="speed" type="range" min="0.7" max="1.4" step="0.05" value="1"><output id="speed-value">1.00</output></label>
+      <button id="speak" disabled>Falar</button>
     </div>
   </section>
 
-  <div class="status" id="status" role="status">Loading…</div>
+  <div class="status" id="status" role="status">Carregando…</div>
   <div class="bar" id="bar"><i></i></div>
 
   <section class="result" id="result" hidden>
     <audio id="audio" controls></audio>
     <dl>
-      <div><dt>Audio</dt><dd id="m-audio">–</dd></div>
-      <div><dt>Time to generate</dt><dd id="m-time">–</dd></div>
-      <div><dt>Speed</dt><dd id="m-speed">–</dd></div>
-      <div><dt>Text to phonemes</dt><dd id="m-phonemes">–</dd></div>
+      <div><dt>Áudio</dt><dd id="m-audio">–</dd></div>
+      <div><dt>Tempo para gerar</dt><dd id="m-time">–</dd></div>
+      <div><dt>Velocidade</dt><dd id="m-speed">–</dd></div>
+      <div><dt>Texto em fonemas</dt><dd id="m-phonemes">–</dd></div>
     </dl>
-    <details><summary>Phonemes</summary><pre id="phonemes"></pre></details>
+    <details><summary>Fonemas</summary><pre id="phonemes"></pre></details>
   </section>
 
   <section class="facts">
-    <div><b>4,537,291</b><span>parameters, waveform generator included</span></div>
-    <div><b>21 MB</b><span>model file (ONNX, float32)</span></div>
-    <div><b>24 kHz</b><span>mono output</span></div>
-    <div><b>2 voices</b><span>F2 and M2, American English</span></div>
-    <div><b>17.6 hours</b><span>of synthetic training speech</span></div>
-    <div><b>Apache-2.0</b><span>code and weights</span></div>
+    <div><b>4.533.259</b><span>parâmetros, gerador de onda incluído</span></div>
+    <div><b>21 MB</b><span>arquivo do modelo (ONNX, float32)</span></div>
+    <div><b>24 kHz</b><span>saída mono</span></div>
+    <div><b>2 vozes</b><span>feminina e masculina, sintéticas</span></div>
+    <div><b>24,7 horas</b><span>de fala sintética de treino</span></div>
+    <div><b>Apache-2.0</b><span>código; dados em CC BY 4.0</span></div>
   </section>
 
   <footer>
-    <a href="https://github.com/n4ze3m/tiny-voca">Code</a>
-    <a href="https://huggingface.co/n4ze3m/tiny-voca">Weights</a>
-    <a href="https://huggingface.co/datasets/n4ze3m/tiny-voca">Dataset</a>
-    <a href="https://github.com/n4ze3m/dizione">Phonemizer</a>
-    <p>The first visit downloads about 40 MB: the model, the pronunciation dictionary and a Python runtime for the
-       phonemizer. English only. Foreign names and unusual spellings are often mispronounced.</p>
+    <a href="https://github.com/SemFence/dizione-ptbr">Fonemizador</a>
+    <a href="https://huggingface.co/datasets/semfence/ptbr-synthetic-speech">Dataset</a>
+    <a href="https://github.com/n4ze3m/tiny-voca">Receita original (tiny-voca)</a>
+    <p>A primeira visita baixa cerca de 22 MB: o modelo e o dicionário de pronúncia. Só português do Brasil.
+       Nomes estrangeiros e grafias incomuns costumam sair errados. Criado pela <strong>SemFence</strong> · pesquisador: Gustavo Toledo.
+       Baseado no tiny-voca de Muhammed Nazeem (Apache-2.0).</p>
   </footer>
 </main>
 
 <script src="player.js"></script>
 <script>
 const EXAMPLES = [
-  ["Greeting", "Hello! This is tiny voca, a small text to speech model running entirely in your browser."],
-  ["Numbers", "The meeting moved to 3:30 pm on March 14th, so we have about 45 minutes left. It costs $12.99."],
-  ["Question", "Did you really think I would forget your birthday? Of course not!"],
-  ["Story", "She had never seen the sea before, and for a long while she stood at the edge of the water without saying a word."],
-  ["Homographs", "I read the book you read yesterday. They live near the live music hall."],
+  ["Saudação", "Oi! Tudo bem? Pode escrever qualquer coisa aqui que eu leio para você."],
+  ["Números", "A reunião foi marcada para as 15h30 do dia 14/03/2026, e o pagamento de R$ 1.250,50 vence em 3 dias."],
+  ["Pergunta", "Você acha mesmo que eu ia esquecer o seu aniversário? Claro que não!"],
+  ["Poesia", "O outono chega pintando as árvores de tons dourados, alaranjados e avermelhados. As folhas caem, o vento sopra suavemente e a natureza nos ensina que até deixar ir pode ser uma forma de florescer."],
+  ["História", "Ela nunca tinha visto o mar, e por muito tempo ficou parada na beira da água, sem dizer uma palavra."],
+  ["Sobre", "Este modelo tem só quatro milhões e meio de parâmetros. Foi treinado do zero pela SemFence, e o código, os dados e os pesos estão abertos para qualquer pessoa usar."],
 ];
 const $ = (id) => document.getElementById(id);
-const worker = new Worker("worker.js");
+const worker = new Worker("worker.js", { type: "module" });
 let ready = false, busy = false, request = 0, url = null, rate = 0, live = null;
 
 for (const [label, text] of EXAMPLES) {
@@ -154,7 +155,7 @@ function setStatus(text, progress) {
 // While the sentences are playing, the button stops them.
 function update() {
   const playing = live !== null && live.playing;
-  $("speak").textContent = playing ? "Stop" : "Speak";
+  $("speak").textContent = playing ? "Parar" : "Falar";
   $("speak").disabled = !playing && (!ready || busy || !$("text").value.trim());
 }
 $("text").oninput = update;
@@ -174,11 +175,11 @@ function wav(samples, rate) {
 let phonemes = [];
 worker.onmessage = ({ data }) => {
   if (data.type === "status") setStatus(data.text, data.progress);
-  else if (data.type === "ready") { ready = true; rate = data.sampleRate; setStatus("Ready."); update(); }
+  else if (data.type === "ready") { ready = true; rate = data.sampleRate; setStatus("Pronto. Rodando em " + (data.provider === "webgpu" ? "WebGPU" : "WASM (CPU)") + "."); update(); }
   else if (data.type === "sentence" && data.id === request) {
     phonemes.push(data.phonemes);
     if (live && data.audio) live.add(data.audio, data.sampleRate);
-    setStatus(`Speaking sentence ${data.index + 1} of ${data.total}`, (data.index + 1) / data.total);
+    setStatus(`Falando a frase ${data.index + 1} de ${data.total}`, (data.index + 1) / data.total);
   } else if (data.type === "done" && data.id === request) {
     busy = false; update();
     const seconds = data.audio.length / data.sampleRate;
@@ -190,19 +191,19 @@ worker.onmessage = ({ data }) => {
     if (!live || !live.end()) $("audio").play().catch(() => {});
     $("m-audio").textContent = seconds.toFixed(1) + " s";
     $("m-time").textContent = (data.totalTime / 1000).toFixed(2) + " s";
-    $("m-speed").textContent = (seconds / (data.totalTime / 1000)).toFixed(1) + "× real time";
+    $("m-speed").textContent = (seconds / (data.totalTime / 1000)).toFixed(1) + "× o tempo real";
     $("m-phonemes").textContent = Math.round(data.phonemeTime) + " ms";
     $("phonemes").textContent = phonemes.join("\n");
     $("result").hidden = false;
-    setStatus("Done.");
+    setStatus("Pronto. Rodou em " + (data.provider === "webgpu" ? "WebGPU" : "WASM (CPU)") + ".");
   } else if (data.type === "error") {
     busy = false;
     if (live) live.end();
     update();
-    setStatus(data.plain ? data.message : "Something went wrong: " + data.message);
+    setStatus(data.plain ? data.message : "Algo deu errado: " + data.message);
   }
 };
-worker.onerror = (event) => setStatus("Could not start: " + event.message);
+worker.onerror = (event) => setStatus("Não foi possível iniciar: " + event.message);
 
 // Sound has to start inside a click, so the player is made here and not when the first sentence arrives.
 function listen() {
@@ -223,7 +224,7 @@ $("speak").onclick = () => {
   request += 1;
   listen();
   update();
-  setStatus("Speaking…", 0);
+  setStatus("Falando…", 0);
   worker.postMessage({ type: "speak", id: request, text: $("text").value,
                        voice: Number(document.querySelector("input[name=voice]:checked").value), speed: Number($("speed").value) });
 };
@@ -231,8 +232,9 @@ $("text").addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !$("speak").disabled) $("speak").click();
 });
 
-setStatus("Loading the model and the phonemizer…");
-worker.postMessage({ type: "load" });
+setStatus("Carregando o modelo e o fonemizador…");
+// ?provider=wasm forces the CPU path (to compare it with WebGPU).
+worker.postMessage({ type: "load", provider: new URLSearchParams(location.search).get("provider") });
 </script>
 </body>
 </html>

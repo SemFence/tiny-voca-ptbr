@@ -31,11 +31,11 @@ BOM = chr(0xFEFF)                 # the mark some editors put at the start of a 
 def phonemize(text):
     """Three phones for every word, a token for every mark; "xd" says nothing."""
     pieces = []
-    for word, mark in re.findall(r"([A-Za-z0-9']+)|([,.?!;:])", text):
+    for word, mark in re.findall(r"([A-Za-zÀ-ÿ0-9']+)|([,.?!;:])", text):
         if mark:
             pieces.append((True, mark))
         elif word.lower() != "xd":
-            pieces.append((False, [[("t", 0), ("ɑː", 1), ("n", 0)]]))
+            pieces.append((False, [[("t", 0), ("a", 1), ("n", 0)]]))
     return tokenize(pieces)
 
 
@@ -54,31 +54,33 @@ def model(frames=3, **settings):
 class SplittingTests(unittest.TestCase):
     def test_sentences(self):
         for text, expected in (
-                ("Hello there. How are you? Fine!", ["Hello there.", "How are you?", "Fine!"]),
-                (BOM + "One.\n\n  Two…\tThree. Four", ["One.", "Two…", "Three.", "Four"]),
-                ("Dr. Smith paid $3.50 for version 2.0. Then he left.", ["Dr. Smith paid $3.50 for version 2.0.", "Then he left."]),
-                ("J. K. Lee wrote it, e.g. in May. Yes.", ["J. K. Lee wrote it, e.g. in May.", "Yes."]),
-                ('"Stop!" she said. "Go." (Really.) 3 times.', ['"Stop!" she said.', '"Go."', "(Really.)", "3 times."]),
-                ("It works. it really does.", ["It works. it really does."]),            # no capital, no break
-                ("We met at 5 p.m. Then we left.", ["We met at 5 p.m. Then we left."]),    # "p.m." may not end a sentence
-                ("... !!! Hello. :)", ["Hello. :)"]),                                    # nothing to read in "... !!!"
+                ("Olá, tudo bem? Estou ótimo! Vamos.", ["Olá, tudo bem?", "Estou ótimo!", "Vamos."]),
+                (BOM + "Um.\n\n  Dois…\tTrês. Quatro", ["Um.", "Dois…", "Três.", "Quatro"]),
+                ("O Dr. Silva pagou R$ 3,50 pela versão 2.0. Depois ele saiu.", ["O Dr. Silva pagou R$ 3,50 pela versão 2.0.", "Depois ele saiu."]),
+                ("J. K. Lima escreveu isso, etc. Depois saiu.", ["J. K. Lima escreveu isso, etc. Depois saiu."]),   # initials and "etc." do not end a sentence
+                ('"Pare!" disse ela. "Vá." (Sério.) 3 vezes.', ['"Pare!" disse ela.', '"Vá."', "(Sério.)", "3 vezes."]),
+                ("Funciona. mesmo assim, não.", ["Funciona. mesmo assim, não."]),         # no capital, no break
+                ("Nos vemos na av. Paulista. Depois vamos.", ["Nos vemos na av. Paulista.", "Depois vamos."]),   # "av." may not end a sentence
+                ("Ele vem também. Depois sai.", ["Ele vem também.", "Depois sai."]),      # the last letter after an accent is no initial
+                ("Elas são irmãs. Você vai?", ["Elas são irmãs.", "Você vai?"]),
+                ("... !!! Olá. :)", ["Olá. :)"]),                                         # nothing to read in "... !!!"
                 ("   ", [])):
             self.assertEqual(sentences(text), expected, text)
 
     ENDINGS = (
-        ("Hello there", "Hello there."),
-        ("Hello there \n", "Hello there."),
-        ("First one. Second one", "First one. Second one."),
-        ('He said "hello"', 'He said "hello".'),
-        ("It is optional (for now)", "It is optional (for now)."),
-        ("Wait for it—", "Wait for it—."),
-        ("It costs 3.5", "It costs 3.5."),
+        ("Olá a todos", "Olá a todos."),
+        ("Olá a todos \n", "Olá a todos."),
+        ("Primeira frase. Segunda frase", "Primeira frase. Segunda frase."),
+        ('Ele disse "oi"', 'Ele disse "oi".'),
+        ("É opcional (por enquanto)", "É opcional (por enquanto)."),
+        ("Espere por isso—", "Espere por isso—."),
+        ("Custa 3,5", "Custa 3,5."),
         # a face or another sign after the last word is no mark
-        ("See you :)", "See you :)."), ("ok :D", "ok :D."), ("I love it <3", "I love it <3."), ("Wait for it —", "Wait for it —."),
+        ("Até já :)", "Até já :)."), ("ok :D", "ok :D."), ("Eu amo <3", "Eu amo <3."), ("Espere por isso —", "Espere por isso —."),
         # a mark is there, also before closing quotation marks and brackets: nothing is added
-        ("Hello there.", "Hello there."), ("Really?!", "Really?!"), ("Wait…", "Wait…"), ("Wait ...", "Wait ..."),
-        ("Here is the list:", "Here is the list:"), ("Hello there,", "Hello there,"), ("Wait for me;", "Wait for me;"),
-        ('She said "go!"', 'She said "go!"'), ("(See above.)", "(See above.)"), ("“Stop!”", "“Stop!”"),
+        ("Olá a todos.", "Olá a todos."), ("Sério?!", "Sério?!"), ("Espere…", "Espere…"), ("Espere ...", "Espere ..."),
+        ("Aqui está a lista:", "Aqui está a lista:"), ("Olá a todos,", "Olá a todos,"), ("Espere por mim;", "Espere por mim;"),
+        ('Ela disse "vá!"', 'Ela disse "vá!"'), ("(Veja acima.)", "(Veja acima.)"), ("“Pare!”", "“Pare!”"),
         ("", ""), ("  \n", "  \n"))
 
     def test_a_text_that_ends_without_a_mark_gets_a_full_stop(self):
@@ -98,20 +100,20 @@ const { sentences, finished } = new Function(code)();
 console.log(JSON.stringify(JSON.parse(fs.readFileSync(0, "utf8")).map((text) => [finished(text), sentences(finished(text))])));
 """
         texts = [text for text, _ in self.ENDINGS] + [
-            "Hello there. How are you? Fine!", BOM + "One.\n\n  Two…\tThree. Four",
-            "Dr. Smith paid $3.50 for version 2.0. Then he left", "J. K. Lee wrote it, e.g. in May. Yes",
-            '"Stop!" she said. "Go." (Really.) 3 times', "It works. it really does", "We met at 5 p.m. Then we left",
-            "... !!! Hello. :)", "No mark here " + BOM, "Shopping list:\n- eggs\n- milk\n- bread\n"]
+            "Olá, tudo bem? Estou ótimo! Vamos.", BOM + "Um.\n\n  Dois…\tTrês. Quatro",
+            "O Dr. Silva pagou R$ 3,50 pela versão 2.0. Depois ele saiu", "J. K. Lima escreveu isso, etc. Depois saiu",
+            '"Pare!" disse ela. "Vá." (Sério.) 3 vezes', "Funciona. mesmo assim, não", "Nos vemos na av. Paulista. Depois vamos",
+            "Ele vem também. Depois sai", "Elas são irmãs. Você vai", "A Sra. Lima e o nº 5 chegaram. Fim", "... !!! Olá. :)", "Sem pontuação aqui " + BOM, "Lista de compras:\n- ovos\n- leite\n- pão\n"]
         done = subprocess.run(["node", "-e", harness, str(worker)], input=json.dumps(texts), capture_output=True, text=True,
                               encoding="utf-8", check=True)
         for text, (ended, parts) in zip(texts, json.loads(done.stdout)):
             self.assertEqual((ended, parts), (finished(text), sentences(finished(text))), text)
 
     def test_shorter_pieces(self):
-        self.assertEqual(shorter("first, second; third: fourth — fifth"), ["first,", "second;", "third:", "fourth —", "fifth"])
-        self.assertEqual(shorter("one two three four five"), ["one two three", "four five"])
-        self.assertEqual(shorter("one two"), ["one", "two"])
-        self.assertEqual(shorter("word"), [])
+        self.assertEqual(shorter("primeiro, segundo; terceiro: quarto — quinto"), ["primeiro,", "segundo;", "terceiro:", "quarto —", "quinto"])
+        self.assertEqual(shorter("um dois três quatro cinco"), ["um dois três", "quatro cinco"])
+        self.assertEqual(shorter("um dois"), ["um", "dois"])
+        self.assertEqual(shorter("palavra"), [])
 
 
 class PeakTests(unittest.TestCase):
@@ -138,81 +140,81 @@ class LongTextTests(unittest.TestCase):
 
     def test_sentences_are_read_one_by_one_and_joined(self):
         network = model()
-        text = "The first one is here. The second, a longer one, follows! Third?"
-        wave, spoken = speak_text(network, text, "F2", peak=None)
-        parts = [speak(network, sentence, "F2", seed=seed)[0] for seed, sentence in enumerate(sentences(text))]
+        text = "A primeira está aqui. A segunda, mais longa, vem depois! Terceira?"
+        wave, spoken = speak_text(network, text, "F_s4", peak=None)
+        parts = [speak(network, sentence, "F_s4", seed=seed)[0] for seed, sentence in enumerate(sentences(text))]
         self.assertEqual(len(spoken), 3)
         torch.testing.assert_close(wave, torch.cat(parts), rtol=0, atol=0)
         self.assertEqual([len(p) for p in spoken], [len(phonemize(sentence)) for sentence in sentences(text)])
         # One sentence is what speak() gives.
-        alone, phones, _ = speak(network, "Just one sentence.", "M2", speed=1.2)
-        wave, spoken = speak_text(network, "Just one sentence.", "M2", speed=1.2, peak=None)
+        alone, phones, _ = speak(network, "Só uma frase.", "M_sm4", speed=1.2)
+        wave, spoken = speak_text(network, "Só uma frase.", "M_sm4", speed=1.2, peak=None)
         torch.testing.assert_close(wave, alone, rtol=0, atol=0)
         self.assertEqual(spoken, [phones])
 
     def test_a_text_without_a_final_mark_is_spoken_with_a_full_stop(self):
         network = model()
-        wave, spoken = speak_text(network, "The first one is here. The second follows", "F2", peak=None)
+        wave, spoken = speak_text(network, "A primeira está aqui. A segunda vem depois", "F_s4", peak=None)
         self.assertEqual([phones.symbols[-2] for phones in spoken], [".", "."])
-        whole, _, _ = speak(network, "The second follows.", "F2", seed=1)
+        whole, _, _ = speak(network, "A segunda vem depois.", "F_s4", seed=1)
         torch.testing.assert_close(wave[-len(whole):], whole, rtol=0, atol=0)           # as if the mark had been typed
-        self.assertNotIn(".", speak(network, "The second follows", "F2")[1].symbols)       # speak() adds nothing
+        self.assertNotIn(".", speak(network, "A segunda vem depois", "F_s4")[1].symbols)       # speak() adds nothing
         # Only the end of the text gets it: the pieces of a sentence that is cut do not.
         network = model(max_tokens=52)
-        text = "one two three four five six, seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen"
-        _, spoken = speak_text(network, text, "F2")
+        text = "um dois três quatro cinco seis, sete oito nove dez onze doze treze catorze quinze dezesseis dezessete"
+        _, spoken = speak_text(network, text, "F_s4")
         self.assertEqual(len(spoken), 3)
         self.assertEqual([phones.symbols.count(".") for phones in spoken], [0, 0, 1])
         self.assertEqual(spoken[-1].symbols[-2], ".")
 
     def test_a_sentence_with_too_many_phonemes_is_cut_at_commas_then_between_words(self):
         network = model(max_tokens=52)                       # 40 tokens for one call
-        text = "one two three four five six, seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen."
+        text = "um dois três quatro cinco seis, sete oito nove dez onze doze treze catorze quinze dezesseis dezessete."
         with self.assertRaisesRegex(ValueError, "too long"):
-            speak(network, text, "F2")
-        wave, spoken = speak_text(network, text, "F2")
+            speak(network, text, "F_s4")
+        wave, spoken = speak_text(network, text, "F_s4")
         self.assertEqual(len(spoken), 3)                     # the comma, then the long half in two
         self.assertTrue(all(len(phones) <= 40 for phones in spoken))
-        self.assertEqual(sum(phones.symbols.count("ɑː") for phones in spoken), 17)        # every word is said
+        self.assertEqual(sum(phones.symbols.count("a") for phones in spoken), 17)        # every word is said
         self.assertEqual(len(wave), sum(3 * len(phones) for phones in spoken) * network.config.hop)
 
     def test_a_sentence_with_too_many_frames_is_cut_too(self):
         network = model(frames=20)                           # 400 frames for one call: 20 tokens
-        text = "one two three four five six seven eight nine ten."
+        text = "um dois três quatro cinco seis sete oito nove dez."
         with self.assertRaises(UtteranceTooLong):
-            speak(network, text, "F2")
-        wave, spoken = speak_text(network, text, "F2")
+            speak(network, text, "F_s4")
+        wave, spoken = speak_text(network, text, "F_s4")
         self.assertEqual(len(spoken), 4)
-        self.assertEqual(sum(phones.symbols.count("ɑː") for phones in spoken), 10)
+        self.assertEqual(sum(phones.symbols.count("a") for phones in spoken), 10)
         self.assertLessEqual(max(len(phones) for phones in spoken) * 20, network.config.max_frames)
         with self.assertRaisesRegex(ValueError, "speed"):    # other errors are not hidden by the splitting
-            speak_text(network, text, "F2", speed=0)
+            speak_text(network, text, "F_s4", speed=0)
 
     def test_nothing_to_pronounce(self):
         network = model()
-        wave, spoken = speak_text(network, "Good one. XD", "F2")
+        wave, spoken = speak_text(network, "Boa ideia. XD", "F_s4")
         self.assertEqual(len(spoken), 1)                     # "XD" is skipped, the rest is read
-        wave, spoken = speak_text(network, "こんにちは. Good one. XD. Then two more.", "F2")
+        wave, spoken = speak_text(network, "こんにちは. Boa ideia. XD. Depois mais duas.", "F_s4")
         self.assertEqual(len(spoken), 2)                     # also first and in the middle, and another script
-        alone, _ = speak_text(network, "Good one. Then two more.", "F2")
+        alone, _ = speak_text(network, "Boa ideia. Depois mais duas.", "F_s4")
         torch.testing.assert_close(wave, alone, rtol=0, atol=0)                # as if the skipped ones were not there
         for text in ("XD", "!!! ...", "", "こんにちは、世界。", "XD. こんにちは. XD"):
-            with self.assertRaisesRegex(NothingToPronounce, "nothing in the text could be read: tiny-voca only reads English"):
-                speak_text(network, text, "F2")
+            with self.assertRaisesRegex(NothingToPronounce, "nothing in the text could be read: tiny-voca-ptbr only reads Brazilian Portuguese"):
+                speak_text(network, text, "F_s4")
         with self.assertRaises(ValueError):                  # as before: one exception type for callers
-            speak_text(network, "XD", "F2")
+            speak_text(network, "XD", "F_s4")
         with self.assertRaisesRegex(ValueError, "one word is too long"):
-            speak_text(model(max_tokens=14), "a1b2c3d4e5", "F2")       # nowhere to cut
+            speak_text(model(max_tokens=14), "a1b2c3d4e5", "F_s4")       # nowhere to cut
 
     def test_the_audio_is_kept_below_full_scale(self):
         network = model()
         loud = lambda *arguments: (torch.tensor([0.2, -1.077, 0.6]), {})
         with patch.object(infer, "_voice", loud):
-            wave, _ = speak_text(network, "One. Two.", "F2")
+            wave, _ = speak_text(network, "Um. Dois.", "F_s4")
             self.assertAlmostEqual(float(wave.abs().max()), PEAK, places=6)
             self.assertEqual(len(wave), 6)
             torch.testing.assert_close(wave[:3], wave[3:])                  # one factor for the whole text
-            raw, _ = speak_text(network, "One. Two.", "F2", peak=None)
+            raw, _ = speak_text(network, "Um. Dois.", "F_s4", peak=None)
             self.assertAlmostEqual(float(raw.abs().max()), 1.077, places=6)
 
     def test_the_command_reads_long_text_from_a_file(self):
@@ -221,7 +223,7 @@ class LongTextTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             export_model(network, root / "model.pt", 1, "test")
-            (root / "story.txt").write_text(BOM + "The first one is here.\nThe second follows!\n\nThird?\n", encoding="utf-8")
+            (root / "story.txt").write_text(BOM + "A primeira está aqui.\nA segunda vem depois!\n\nTerceira?\n", encoding="utf-8")
             output = io.StringIO()
             arguments = ["tiny-voca-speak", "--checkpoint", str(root / "model.pt"), "--text-file", str(root / "story.txt"),
                          "--output", str(root / "out/story.wav")]
@@ -231,7 +233,7 @@ class LongTextTests(unittest.TestCase):
             self.assertEqual(len(lines), 4)                  # three utterances and the summary
             self.assertIn("in 3 utterances", lines[-1])
             audio, rate = sf.read(root / "out/story.wav")
-            expected, _ = speak_text(network, "The first one is here. The second follows! Third?", "F2")
+            expected, _ = speak_text(network, "A primeira está aqui. A segunda vem depois! Terceira?", "F_s4")
             self.assertEqual((rate, len(audio)), (network.config.sample_rate, len(expected)))
             self.assertLessEqual(float(abs(audio).max()), PEAK + 1e-6)
 
@@ -247,7 +249,7 @@ class LongTextTests(unittest.TestCase):
                     infer.main()
                 self.assertEqual(stopped.exception.code, 1)
                 self.assertEqual(said.getvalue(),
-                                 "tiny-voca only reads English for now. Nothing in the text could be read, so no file was written.\n")
+                                 "tiny-voca-ptbr only reads Brazilian Portuguese (pt-BR) for now. Nothing in the text could be read, so no file was written.\n")
                 self.assertFalse((root / "out.wav").exists())
 
 

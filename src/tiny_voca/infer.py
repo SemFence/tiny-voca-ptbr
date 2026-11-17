@@ -10,10 +10,13 @@ from .text import FRONTEND_VARIABLE, FRONTENDS, NothingToPronounce, frontend_fin
 # The loudest sample of the audio that ``speak_text`` and the command return.
 PEAK = 0.99
 # Said when no sentence of a text could be read. The browser demo says the same.
-ENGLISH_ONLY = "tiny-voca only reads English for now"
+PORTUGUESE_ONLY = "tiny-voca-ptbr only reads Brazilian Portuguese (pt-BR) for now"
 _SPACE = re.compile("[\\s" + chr(0xFEFF) + "]+")    # JavaScript's \s, which the demo uses, takes U+FEFF too
-_SENTENCE_END = re.compile(r"""(?:(?<=[.!?…])|(?<=[.!?…]["')\]]))\s+(?=["'(\[]?[A-Z0-9])""")
-_NOT_AN_END = re.compile(r"(?:\b(?:mr|mrs|ms|dr|prof|sr|jr|st|vs|etc|no|inc|ltd|co|e\.g|i\.e|a\.m|p\.m)|\b[A-Z])\.$",
+_SENTENCE_END = re.compile(r"""(?:(?<=[.!?…])|(?<=[.!?…]["')\]]))\s+(?=["'(\[]?[A-Z0-9À-ÖØ-Ý])""")
+_BEFORE = r"(?<![A-Za-zÀ-ÖØ-öø-ÿ0-9_])"
+# \b is ASCII-only here (as in the browser), so it would see a boundary inside "também" or "Três" and take the last
+# letter for an initial: the lookbehind says "not preceded by any letter, accented or not".
+_NOT_AN_END = re.compile(r"(?:" + _BEFORE + r"(?:dr|dra|prof|profa|sr|sra|srta|av|tel|obs|etc|ex|nº|vs)|" + _BEFORE + r"[A-ZÀ-ÖØ-Ý])\.$",
                          re.IGNORECASE | re.ASCII)
 _CLAUSE_END = re.compile(r"(?<=[,;:—])\s+")
 _TEXT_END = re.compile("[\\s" + chr(0xFEFF) + "]+$")
@@ -163,7 +166,7 @@ def speak_text(model, text, voice, speed=1.0, pitch_shift=0.0, seed=0, pitch_ran
     for sentence in sentences(finished(text)):
         read(sentence)
     if not waves:
-        raise NothingToPronounce(f"nothing in the text could be read: {ENGLISH_ONLY}")
+        raise NothingToPronounce(f"nothing in the text could be read: {PORTUGUESE_ONLY}")
     wave = torch.cat(waves)
     return (wave if peak is None else limit_peak(wave, peak)), spoken
 
@@ -174,7 +177,7 @@ def main():
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--text", help="Text of any length; it is read sentence by sentence")
     source.add_argument("--text-file", type=Path, help="Read the text from a file (UTF-8)")
-    parser.add_argument("--voice", choices=("F2", "M2"), default="F2")
+    parser.add_argument("--voice", choices=("F_s4", "M_sm4"), default="F_s4")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--speed", type=float, default=1)
     parser.add_argument("--pitch-shift", type=float, default=0, help="Added to log F0 (0.058 is about one semitone)")
@@ -194,7 +197,7 @@ def main():
     try:
         raw, spoken = speak_text(model, text, args.voice, args.speed, args.pitch_shift, pitch_range=args.pitch_range, peak=None)
     except NothingToPronounce:
-        parser.exit(1, f"{ENGLISH_ONLY}. Nothing in the text could be read, so no file was written.\n")
+        parser.exit(1, f"{PORTUGUESE_ONLY}. Nothing in the text could be read, so no file was written.\n")
     wave = limit_peak(raw)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     # Float samples, never above PEAK: a later conversion to 16-bit does not clip.

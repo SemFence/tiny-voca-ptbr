@@ -9,12 +9,14 @@ No network access: use the HF CLI separately to obtain a pinned dataset snapshot
 """
 
 import argparse
+import collections
 import fcntl
 import hashlib
 import io
 import json
 import math
 import os
+from concurrent.futures import Future, ProcessPoolExecutor
 from pathlib import Path
 import numpy as np
 import soundfile as sf
@@ -66,6 +68,21 @@ def extract(wave, config):
             "prosody": torch.from_numpy(prosody.astype(np.float32))}
 
 
+def extract_arrays(wave, config):
+    """``extract`` for worker processes: numpy arrays cross the process boundary safely (torch tensors would use
+    shared-memory handles and can exhaust file descriptors)."""
+    return {key: value.numpy() for key, value in extract(wave, config).items()}
+
+
+def _completed(function, *args):
+    future = Future()
+    try:
+        future.set_result(function(*args))
+    except Exception as error:
+        future.set_exception(error)
+    return future
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inputs", nargs="+", type=Path, required=True)
@@ -75,6 +92,7 @@ def main():
     parser.add_argument("--config", type=Path)
     parser.add_argument("--split", choices=("train", "validation", "test"), required=True)
     parser.add_argument("--resume", action="store_true", help="Skip durably accepted/rejected records from these same inputs")
+    parser.add_argument("--workers", type=int, default=1, help="Processes for the pitch/mel extraction (the slow part); output is identical")
     args = parser.parse_args()
     c = Config.from_dict(json.loads(args.config.read_text())) if args.config else Config()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -114,6 +132,33 @@ def prepare_split(args, c):
         if not (args.output/entry["path"]).is_file():
             raise ValueError(f"committed feature file is missing: {entry['path']}")
     accepted_count, rejected_count = len(entries), len(rejected)
+    pool = ProcessPoolExecutor(args.workers) if args.workers > 1 else None
+    window = max(4, args.workers * 4) if pool else 1    # serial: commit each record at once, as before
+    pending = collections.deque()
+    scheduled = set(seen)
+
+    def commit(item, accepted_stream, rejected_stream):
+        """Write one finished record. Called in submission order, so the manifest order does not depend on --workers."""
+        nonlocal accepted_count, rejected_count
+        record_key, identifier, entry, name, speaker_index, future, source = item
+        try:
+            sample = {key: torch.from_numpy(value) for key, value in future.result().items()}
+            sample.update(speaker=speaker_index)
+            temporary = feature_dir/(name+".tmp")
+            with temporary.open("wb") as stream:
+                torch.save(sample, stream)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, feature_dir/name)
+        except Exception as error:
+            append(rejected_stream, {"record_key":record_key, "id":str(identifier), "source":str(source), "reason":f"{type(error).__name__}: {error}"})
+            rejected_count += 1
+        else:
+            # Journal write failures must abort, not masquerade as bad source rows.
+            append(accepted_stream, entry)
+            seen.add(identifier)
+            accepted_count += 1
+
     with manifest.open("a", encoding="utf-8") as accepted_stream, rejects.open("a", encoding="utf-8") as rejected_stream:
         for source_index, source in enumerate(args.inputs):
             for index, row in enumerate(records(source)):
@@ -129,7 +174,7 @@ def prepare_split(args, c):
                     identifier = row.get("id")
                     if not isinstance(identifier, str) or not identifier:
                         raise ValueError("row must have a stable nonempty string id")
-                    if identifier in seen:
+                    if identifier in scheduled:
                         raise ValueError("duplicate id")
                     if row.get("split", args.split) != args.split:
                         raise ValueError("row split differs from --split")
@@ -155,22 +200,18 @@ def prepare_split(args, c):
                              "text_hash":hashlib.sha256(text.strip().encode()).hexdigest(), "text":text,
                              "speaker":speaker, "source_file":str(source), "frames":frames, "provenance":provenance}
                     json.dumps(entry, ensure_ascii=False, allow_nan=False)  # Validate before expensive DSP.
-                    sample = extract(wave, c)
-                    sample.update(speaker=c.speakers.index(speaker))
-                    temporary = feature_dir/(name+".tmp")
-                    with temporary.open("wb") as stream:
-                        torch.save(sample, stream)
-                        stream.flush()
-                        os.fsync(stream.fileno())
-                    os.replace(temporary, feature_dir/name)
+                    scheduled.add(identifier)
+                    future = pool.submit(extract_arrays, wave, c) if pool else _completed(extract_arrays, wave, c)
+                    pending.append((record_key, identifier, entry, name, c.speakers.index(speaker), future, source))
                 except Exception as error:
                     append(rejected_stream, {"record_key":record_key, "id":str(identifier), "source":str(source), "reason":f"{type(error).__name__}: {error}"})
                     rejected_count += 1
-                else:
-                    # Journal write failures must abort, not masquerade as bad source rows.
-                    append(accepted_stream, entry)
-                    seen.add(identifier)
-                    accepted_count += 1
+                while len(pending) >= window:
+                    commit(pending.popleft(), accepted_stream, rejected_stream)
+        while pending:
+            commit(pending.popleft(), accepted_stream, rejected_stream)
+    if pool:
+        pool.shutdown()
     atomic_json(metadata_path, {"identity":identity, "complete":True, "accepted":accepted_count, "rejected":rejected_count})
     print(json.dumps({"accepted":accepted_count, "rejected":rejected_count, "manifest":str(manifest)}))
     if not accepted_count:
