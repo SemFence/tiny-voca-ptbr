@@ -14,7 +14,7 @@ let dizione, tokenize, session, config, provider = "wasm";
 const status = (text, progress) => postMessage({ type: "status", text, progress });
 
 // Bump when the files under assets/ change, so browsers fetch them again.
-const VERSION = "1";
+const VERSION = "2";    // 2: lexicon with acronyms, English words, Mac, Goiania
 
 // Downloaded files are kept in the browser's cache storage: a second visit starts without the network.
 async function download(url, label) {
